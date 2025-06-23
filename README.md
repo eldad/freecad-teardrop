@@ -11,6 +11,13 @@ The teardrop always **contains** (and do not cross) the hole with the specified 
 
 ![Teardrop Contains A Hole](img/teardrop_contains_hole.jpg)
 
+## Installation and Usage
+
+1. Copy `TeardropSketcher.FCMacro` to your user local macro directory. On Linux this is by default `~/.local/share/FreeCAD/Macro/`.
+   You can also find the location from the macros dialog (in the next step).
+
+2. Click on `Macro > Macros ...` from the toolbar and then select `TeardropSketcher.FCMacro`.
+
 ## Examples
 
 ### Trimmed Teardrop
