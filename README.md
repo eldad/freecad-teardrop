@@ -19,9 +19,15 @@ Trimmed teardrop work well for smaller holes by bridging the top part. Long brid
 
 ![Create Trimmed Teardrop](img/create_trimmed_teardrop.jpg)
 
+#### 45 Degrees
+
 ![45 Degrees Trimmed Teardrop](img/trimmed_45deg.jpg)
 
+#### 30 Degrees
+
 ![30 Degrees Trimmed Teardrop](img/trimmed_30deg.jpg)
+
+#### 60 Degrees
 
 ![60 Degrees Trimmed Teardrop](img/trimmed_60deg.jpg)
 
@@ -31,8 +37,14 @@ Non-trimmed (pointy) teardrop do not require any bridges but might be too high i
 
 ![Create Pointy Teardrop](img/create_pointy_teardrop.jpg)
 
+#### 45 Degrees
+
 ![45 Degrees Pointy Teardrop](img/pointy_45deg.jpg)
 
+#### 30 Degrees
+
 ![30 Degrees Pointy Teardrop](img/pointy_30deg.jpg)
+
+#### 60 Degrees
 
 ![60 Degrees Pointy Teardrop](img/pointy_60deg.jpg)
