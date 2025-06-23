@@ -1,0 +1,172 @@
+# Teardrop Marco
+# Copyright (C) 2025  Eldad Zack
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+import FreeCAD
+import FreeCADGui
+import Sketcher
+from PySide import QtGui, QtCore
+import math
+import logging
+
+def current_sketch():
+    doc  = FreeCAD.activeDocument()
+
+    current_obj = Gui.ActiveDocument.getInEdit().Object
+    if current_obj.TypeId != 'Sketcher::SketchObject':
+      raise Exception('Must have a sketch open')
+
+    sketch_name = current_obj.Name
+    sketch = doc.getObject(sketch_name)
+    logging.debug(f"Current sketch {sketch_name} = {sketch}")
+    return sketch
+
+
+class TeardropDialog(QtGui.QDialog):
+    def __init__(self):
+        super(TeardropDialog, self).__init__()
+        self.setWindowTitle("Create Teardrop Sketch")
+
+        self.layout = QtGui.QFormLayout(self)
+
+        self.diameter = QtGui.QDoubleSpinBox()
+        self.diameter.setMinimum(0.01)
+        self.diameter.setMaximum(10000)
+        self.diameter.setValue(10.0)
+        self.diameter.setSuffix(" mm")
+
+        self.angle = QtGui.QDoubleSpinBox()
+        self.angle.setMinimum(1)
+        self.angle.setMaximum(89)
+        self.angle.setValue(45.0)
+        self.angle.setSuffix(" deg")
+
+        self.trimmed = QtGui.QCheckBox()
+        self.trimmed.setChecked(True)
+
+        self.layout.addRow("Hole Diameter:", self.diameter)
+        self.layout.addRow("Teardrop Angle:", self.angle)
+        self.layout.addRow("Trimmed:", self.trimmed)
+
+        self.buttonBox = QtGui.QDialogButtonBox(QtGui.QDialogButtonBox.Ok | QtGui.QDialogButtonBox.Cancel)
+        self.buttonBox.accepted.connect(self.accept)
+        self.buttonBox.rejected.connect(self.reject)
+        self.layout.addRow(self.buttonBox)
+
+    def get_values(self):
+        return {
+            'diameter': self.diameter.value(),
+            'angle_deg': self.angle.value(),
+            'trimmed': self.trimmed.isChecked(),
+        }
+
+
+def create_teardrop_sketch(diameter, angle_deg, trimmed):
+    print(f"Creating teardrop with diameter {diameter} and angle {angle_deg}")
+    sketch = current_sketch()
+
+    # Arc parameters
+    r = diameter / 2.0
+
+    # TODO: use mouse coordinates as the center
+    x = 0
+    y = 0
+    center = FreeCAD.Vector(x, y, 0)
+    start = FreeCAD.Vector(-r + x, y, 0)
+    end = FreeCAD.Vector(r + x, y, 0)
+    a = math.radians(angle_deg)
+
+    # Add arc (bottom half of circle)
+    arc = sketch.addGeometry(Part.ArcOfCircle(Part.Circle(center, FreeCAD.Vector(0, 0, 1), r), math.pi, 0), False)
+
+    # Construction horizontal line
+    sketch.addConstraint(Sketcher.Constraint('Horizontal', arc, 1, arc, 3))
+    sketch.addConstraint(Sketcher.Constraint('Horizontal', arc, 2, arc, 3))
+
+    sketch.addConstraint(Sketcher.Constraint('Diameter', arc, diameter))
+
+    # When Trimmed, there are 5 segments on the top part. The middle segment (l3) is the trim.
+    if trimmed:
+        # Tangent line points at (x=r) and (y=r) respectively, i.e. (r, tline_y_r) and (tline_x_r, r).
+        # x = r, solve for y
+        tline_y_r = r * ( math.tan(-a) * (1.0  - math.sin(a)) + math.cos(a))
+        # y = r, solve for x
+        tline_x_r = r * ((1.0 - math.cos(a)) / math.tan(-a) + math.sin(a))
+
+        # This gives us four points (2 points mirrored on the y axis) to connect the 5 segments type (trimmed teardrop).
+        p1 = FreeCAD.Vector(-r, tline_y_r)
+        p2 = FreeCAD.Vector(-tline_x_r, r)
+        p3 = FreeCAD.Vector(tline_x_r, r)
+        p4 = FreeCAD.Vector(r, tline_y_r)
+
+    # When not trimmed, there are 4 segments, and the middle point between the 2nd and 3rd is vertical to the arc origin.
+    else:
+        # x = r, solve for y
+        tline_y_r = r * ( math.tan(-a) * (1.0  - math.sin(a)) + math.cos(a))
+        # x = 0, solve for y
+        tline_y_0 = math.tan(a) * math.sin(a) + r * math.cos(a)
+
+        # This gives us three points for a pointy teardrop
+        # For generalization of the code with the trimmed variant, p2 = p3.
+        p1 = FreeCAD.Vector(-r, tline_y_r)
+        p2 = p3 = FreeCAD.Vector(0, tline_y_0)
+        p4 = FreeCAD.Vector(r, tline_y_r)
+
+
+    l1 = sketch.addGeometry(Part.LineSegment(start, p1), False)
+    l2 = sketch.addGeometry(Part.LineSegment(p1, p2), False)
+    if trimmed:
+        l3 = sketch.addGeometry(Part.LineSegment(p2, p3), False)
+        sketch.addConstraint(Sketcher.Constraint('Horizontal', l3))
+    l4 = sketch.addGeometry(Part.LineSegment(p3, p4), False)
+    l5 = sketch.addGeometry(Part.LineSegment(p4, end), False)
+
+    sketch.addConstraint(Sketcher.Constraint('Vertical', l1))
+    sketch.addConstraint(Sketcher.Constraint('Vertical', l5))
+    sketch.addConstraint(Sketcher.Constraint('Equal', l1, l5))
+
+    sketch.addConstraint(Sketcher.Constraint('Coincident', arc, 1, l1, 1))
+    sketch.addConstraint(Sketcher.Constraint('Coincident', l1, 2, l2, 1))
+
+    if trimmed:
+        sketch.addConstraint(Sketcher.Constraint('Coincident', l2, 2, l3, 1))
+        sketch.addConstraint(Sketcher.Constraint('Coincident', l3, 2, l4, 1))
+    else:
+        sketch.addConstraint(Sketcher.Constraint('Coincident', l2, 2, l4, 1))
+
+    sketch.addConstraint(Sketcher.Constraint('Coincident', l4, 2, l5, 1))
+    sketch.addConstraint(Sketcher.Constraint('Coincident', l5, 2, arc, 2))
+
+    # l2, l3, l4 should be tangent to the arc
+    sketch.addConstraint(Sketcher.Constraint('Tangent', l2, arc))
+    if trimmed:
+        sketch.addConstraint(Sketcher.Constraint('Tangent', l3, arc))
+    sketch.addConstraint(Sketcher.Constraint('Tangent', l4, arc))
+
+    # (iline1, pointpos1, iline2, pointpos2, angle); pointpos = 1 start, 2 = end
+    sketch.addConstraint(Sketcher.Constraint('Angle', l2, 2, l4, 1, a * 2))
+
+def main():
+    doc = FreeCAD.ActiveDocument
+    if doc is None:
+        raise Exception("No active document")
+
+    dialog = TeardropDialog()
+    if dialog.exec_():
+        doc.openTransaction("Create teardrop")
+        create_teardrop_sketch(**dialog.get_values())
+        doc.commitTransaction()
+
+main()
